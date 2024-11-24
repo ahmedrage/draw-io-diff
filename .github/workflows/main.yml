@@ -59,7 +59,6 @@ jobs:
               echo "#### ${filename}"
               echo
               
-              # Debug information
               echo "<details><summary>Debug Info</summary>"
               echo
               echo "Looking for old version at: $OLD_PATH"
@@ -85,26 +84,22 @@ jobs:
               echo "</details>"
               echo
               
-              echo "**Before:**"
               if [ -f "$OLD_PATH" ]; then
+                OLD_IMG=$(base64 -w 0 "$OLD_PATH")
+                echo "**Before:**"
                 echo
-                echo "\`\`\`"
-                echo "![Old Version]($OLD_PATH)"
-                echo "\`\`\`"
-                echo
+                echo "<img src=\"data:image/png;base64,${OLD_IMG}\" width=\"500\" />"
               else
-                echo "❌ Old version not found"
+                echo "**Before:** ❌ Old version not found"
               fi
               echo
-              echo "**After:**"
               if [ -f "$NEW_PATH" ]; then
+                NEW_IMG=$(base64 -w 0 "$NEW_PATH")
+                echo "**After:**"
                 echo
-                echo "\`\`\`"
-                echo "![New Version]($NEW_PATH)"
-                echo "\`\`\`"
-                echo
+                echo "<img src=\"data:image/png;base64,${NEW_IMG}\" width=\"500\" />"
               else
-                echo "❌ New version not found"
+                echo "**After:** ❌ New version not found"
               fi
               echo
               echo "---"
@@ -112,14 +107,8 @@ jobs:
             done
           } > comment.md
 
-          body=$(cat comment.md)
-          body="${body//'%'/'%25'}"
-          body="${body//$'\n'/'%0A'}"
-          body="${body//$'\r'/'%0D'}"
-          echo "comment=$body" >> $GITHUB_OUTPUT
-
       - name: Create or Update Comment
         uses: peter-evans/create-or-update-comment@v3
         with:
           issue-number: ${{ github.event.pull_request.number }}
-          body: ${{ steps.generate-comment.outputs.comment }}
+          body-path: comment.md
