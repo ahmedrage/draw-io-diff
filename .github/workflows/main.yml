@@ -8,31 +8,36 @@ jobs:
   compare-diagrams:
     runs-on: ubuntu-latest
     steps:
+      # First checkout - PR version
       - name: Checkout PR
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
+          path: pr-version
 
       - name: Export new diagram version
         uses: rlespinasse/drawio-export-action@v2
         with:
           format: png
           transparent: true
-          output: new-diagrams
+          output: pr-version/new-diagrams
+          path: pr-version
 
+      # Second checkout - Base version
       - name: Checkout base branch
         uses: actions/checkout@v3
         with:
           ref: ${{ github.event.pull_request.base.sha }}
-          clean: true
+          path: base-version
 
       - name: Export old diagram version
         uses: rlespinasse/drawio-export-action@v2
         with:
           format: png
           transparent: true
-          output: old-diagrams
+          output: base-version/old-diagrams
+          path: base-version
 
       - name: Find changed diagrams
         id: changed-files
@@ -40,6 +45,7 @@ jobs:
         with:
           files: |
             **.drawio
+          path: pr-version
 
       - name: Generate comparison comment
         id: generate-comment
@@ -49,9 +55,9 @@ jobs:
             filename=$(basename "$file")
             base_name="${filename%.*}"
             
-            # Convert images to base64
-            old_image=$(base64 -w 0 "old-diagrams/${base_name}.png")
-            new_image=$(base64 -w 0 "new-diagrams/${base_name}.png")
+            # Adjust paths to account for the new directory structure
+            old_image=$(base64 -w 0 "base-version/old-diagrams/${base_name}.png")
+            new_image=$(base64 -w 0 "pr-version/new-diagrams/${base_name}.png")
             
             comment="${comment}#### ${filename}\n\n"
             comment="${comment}**Before:**\n"
