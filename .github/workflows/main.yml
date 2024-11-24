@@ -21,7 +21,7 @@ jobs:
         with:
           format: png
           transparent: true
-          output: new-diagrams
+          output: diagrams/new-diagrams
           path: pr-version
 
       # Second checkout - Base version
@@ -36,17 +36,8 @@ jobs:
         with:
           format: png
           transparent: true
-          output: old-diagrams
+          output: diagrams/old-diagrams
           path: base-version
-
-      - name: Debug file structure
-        run: |
-          echo "Current directory structure:"
-          ls -R
-          echo "PR version diagrams:"
-          ls -la pr-version/new-diagrams || echo "Directory not found"
-          echo "Base version diagrams:"
-          ls -la base-version/old-diagrams || echo "Directory not found"
 
       - name: Find changed diagrams
         id: changed-files
@@ -64,24 +55,12 @@ jobs:
             filename=$(basename "$file")
             base_name="${filename%.*}"
             
-            # Add debug information
             echo "Processing file: $filename"
             echo "Base name: $base_name"
-            echo "Looking for PR version in: pr-version/new-diagrams/$base_name.png"
-            echo "Looking for base version in: base-version/old-diagrams/$base_name.png"
             
-            # Check if files exist
-            if [ ! -f "base-version/old-diagrams/$base_name.png" ]; then
-              echo "Warning: Old version PNG not found"
-              ls -la base-version/old-diagrams/
-            fi
-            if [ ! -f "pr-version/new-diagrams/$base_name.png" ]; then
-              echo "Warning: New version PNG not found"
-              ls -la pr-version/new-diagrams/
-            fi
-            
-            old_image=$(base64 -w 0 "base-version/old-diagrams/${base_name}-Page-1.png") || echo "Failed to encode old image"
-            new_image=$(base64 -w 0 "pr-version/new-diagrams/${base_name}-Page-1.png") || echo "Failed to encode new image"
+            # Updated paths based on the directory structure shown in debug
+            old_image=$(base64 -w 0 "base-version/diagrams/old-diagrams/${base_name}-Page-1.png") || echo "Failed to encode old image"
+            new_image=$(base64 -w 0 "pr-version/diagrams/new-diagrams/${base_name}-Page-1.png") || echo "Failed to encode new image"
             
             comment="${comment}#### ${filename}\n\n"
             comment="${comment}**Before:**\n"
