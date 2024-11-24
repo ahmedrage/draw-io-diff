@@ -43,6 +43,13 @@ jobs:
           output: diagrams/old-diagrams
           path: base-version
 
+      - name: Debug File Structure
+        run: |
+          echo "Listing all directories:"
+          ls -R
+          echo "Looking for PNG files:"
+          find . -name "*.png"
+
       - name: Find changed diagrams
         id: changed-files
         uses: tj-actions/changed-files@v41
@@ -54,7 +61,6 @@ jobs:
       - name: Generate comparison comment
         id: generate-comment
         run: |
-          # Create a temporary file to store our markdown
           {
             echo "### Draw.io Diagram Changes"
             echo
@@ -65,23 +71,44 @@ jobs:
               echo "Processing file: $filename" >&2
               echo "Base name: $base_name" >&2
               
-              OLD_PATH="base-version/diagrams/old-diagrams/${base_name}-Page-1.png"
-              NEW_PATH="pr-version/diagrams/new-diagrams/${base_name}-Page-1.png"
+              # Look for PNG files with similar names
+              echo "Looking for PNG files matching $base_name:" >&2
+              find . -name "*${base_name}*.png" >&2
+              
+              # Try both with and without Page-1 suffix
+              OLD_PATH_1="base-version/diagrams/drawio-assets/${base_name}-Page-1.png"
+              OLD_PATH_2="base-version/diagrams/drawio-assets/${base_name}.png"
+              NEW_PATH_1="pr-version/diagrams/drawio-assets/${base_name}-Page-1.png"
+              NEW_PATH_2="pr-version/diagrams/drawio-assets/${base_name}.png"
+              
+              echo "Checking paths:" >&2
+              echo "OLD_PATH_1: $OLD_PATH_1" >&2
+              echo "OLD_PATH_2: $OLD_PATH_2" >&2
+              echo "NEW_PATH_1: $NEW_PATH_1" >&2
+              echo "NEW_PATH_2: $NEW_PATH_2" >&2
               
               echo "#### ${filename}"
               echo
               echo "**Before:**"
-              if [ -f "$OLD_PATH" ]; then
-                echo "<img src=\"data:image/png;base64,$(base64 -w 0 "$OLD_PATH")\" width=\"500\">"
+              if [ -f "$OLD_PATH_1" ]; then
+                echo "<img src=\"data:image/png;base64,$(base64 -w 0 "$OLD_PATH_1")\" width=\"500\">"
+              elif [ -f "$OLD_PATH_2" ]; then
+                echo "<img src=\"data:image/png;base64,$(base64 -w 0 "$OLD_PATH_2")\" width=\"500\">"
               else
-                echo "Image not found"
+                echo "Image not found in paths:"
+                echo "- $OLD_PATH_1"
+                echo "- $OLD_PATH_2"
               fi
               echo
               echo "**After:**"
-              if [ -f "$NEW_PATH" ]; then
-                echo "<img src=\"data:image/png;base64,$(base64 -w 0 "$NEW_PATH")\" width=\"500\">"
+              if [ -f "$NEW_PATH_1" ]; then
+                echo "<img src=\"data:image/png;base64,$(base64 -w 0 "$NEW_PATH_1")\" width=\"500\">"
+              elif [ -f "$NEW_PATH_2" ]; then
+                echo "<img src=\"data:image/png;base64,$(base64 -w 0 "$NEW_PATH_2")\" width=\"500\">"
               else
-                echo "Image not found"
+                echo "Image not found in paths:"
+                echo "- $NEW_PATH_1"
+                echo "- $NEW_PATH_2"
               fi
               echo
               echo "---"
@@ -89,15 +116,9 @@ jobs:
             done
           } > comment.md
           
-          # Save the comment content as a string that preserves newlines
           echo 'COMMENT<<EOF' >> $GITHUB_ENV
           cat comment.md >> $GITHUB_ENV
           echo 'EOF' >> $GITHUB_ENV
-
-      - name: Debug Comment Content
-        run: |
-          echo "Content of comment.md:"
-          cat comment.md
 
       - name: Create or Update Comment
         uses: peter-evans/create-or-update-comment@v3
