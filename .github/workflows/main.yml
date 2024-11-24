@@ -5,14 +5,12 @@ on:
       - "**.drawio"
 
 permissions:
-  contents: write
+  contents: read
   pull-requests: write
 
 jobs:
   compare-diagrams:
     runs-on: ubuntu-latest
-    env:
-      GIT_DISCOVERY_ACROSS_FILESYSTEM: 1
     steps:
       - name: Checkout PR
         uses: actions/checkout@v3
@@ -43,83 +41,82 @@ jobs:
           output: exported-diagrams
           path: base-version
 
-      - name: Prepare git repository for images
-        run: |
-          # Create and move to a new directory for the image repository
-          mkdir image-repository
-          cd image-repository
-          
-          # Initialize git
-          git init
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          
-          # Set up remote
-          git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
-          
-          # Try to fetch existing branch
-          git fetch origin pr-${{ github.event.pull_request.number }}-diagrams || true
-          
-          # Create or switch to the branch
-          if git fetch origin pr-${{ github.event.pull_request.number }}-diagrams; then
-            git checkout pr-${{ github.event.pull_request.number }}-diagrams
-            echo "Branch exists, updating..."
-          else
-            git checkout --orphan pr-${{ github.event.pull_request.number }}-diagrams
-            echo "Creating new branch..."
-          fi
-          
-          # Create directory for the images
-          mkdir -p pr-${{ github.event.pull_request.number }}-images
-          
-          # Copy the exported images
-          for file in $(find ../pr-version -name "*.drawio"); do
-            filename=$(basename "$file")
-            base_name="${filename%.*}"
-            
-            cp "../base-version/diagrams/exported-diagrams/${base_name}-Page-1.png" "pr-${{ github.event.pull_request.number }}-images/${base_name}-before.png" || true
-            cp "../pr-version/diagrams/exported-diagrams/${base_name}-Page-1.png" "pr-${{ github.event.pull_request.number }}-images/${base_name}-after.png" || true
-          done
-          
-          # Stage and commit changes
-          git add .
-          git commit -m "Update diagram comparison images for PR #${{ github.event.pull_request.number }}" || true
-          git push origin pr-${{ github.event.pull_request.number }}-diagrams --force
-
-      - name: Generate comparison comment
-        id: generate-comment
-        env:
-          REPO: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          BRANCH: pr-${{ github.event.pull_request.number }}-diagrams
-        run: |
-          cat > comment.md << 'EOL'
-          ### Draw.io Diagram Changes
-
-          EOL
-          
-          for file in $(find pr-version -name "*.drawio"); do
-            filename=$(basename "$file")
-            base_name="${filename%.*}"
-            
-            cat >> comment.md << EOF
-          #### ${filename}
-          
-          **Before:**
-          
-          <img src="https://raw.githubusercontent.com/$REPO/$BRANCH/pr-$PR_NUMBER-images/${base_name}-before.png" width="500" />
-          
-          **After:**
-          
-          <img src="https://raw.githubusercontent.com/$REPO/$BRANCH/pr-$PR_NUMBER-images/${base_name}-after.png" width="500" />
-          
-          ---
-          
-          EOF
-          done
-
-      - name: Create or Update Comment
-        uses: peter-evans/create-or-update-comment@v3
+      - name: Upload Images and Create Comment
+        uses: actions/github-script@v7
         with:
-          issue-number: ${{ github.event.pull_request.number }}
-          body-file: comment.md
+          script: |
+            const fs = require('fs').promises;
+            const path = require('path');
+            
+            // Function to get all .drawio files
+            async function findDrawioFiles(dir) {
+              const files = await fs.readdir(dir);
+              return files.filter(file => file.endsWith('.drawio'));
+            }
+            
+            // Function to create comment with attachments
+            async function createCommentWithAttachments(files) {
+              let body = '### Draw.io Diagram Changes\n\n';
+              
+              for (const file of files) {
+                const baseName = path.basename(file, '.drawio');
+                const beforePath = `base-version/diagrams/exported-diagrams/${baseName}-Page-1.png`;
+                const afterPath = `pr-version/diagrams/exported-diagrams/${baseName}-Page-1.png`;
+                
+                body += `#### ${file}\n\n`;
+                body += '**Before:**\n\n';
+                body += `![Before](${beforePath})\n\n`;
+                body += '**After:**\n\n';
+                body += `![After](${afterPath})\n\n`;
+                body += '---\n\n';
+              }
+              
+              // Get attachment paths
+              const attachments = [];
+              for (const file of files) {
+                const baseName = path.basename(file, '.drawio');
+                try {
+                  await fs.access(`base-version/diagrams/exported-diagrams/${baseName}-Page-1.png`);
+                  attachments.push({
+                    name: `${baseName}-before.png`,
+                    path: `base-version/diagrams/exported-diagrams/${baseName}-Page-1.png`
+                  });
+                } catch (e) {
+                  console.log(`No before image for ${baseName}`);
+                }
+                
+                try {
+                  await fs.access(`pr-version/diagrams/exported-diagrams/${baseName}-Page-1.png`);
+                  attachments.push({
+                    name: `${baseName}-after.png`,
+                    path: `pr-version/diagrams/exported-diagrams/${baseName}-Page-1.png`
+                  });
+                } catch (e) {
+                  console.log(`No after image for ${baseName}`);
+                }
+              }
+              
+              try {
+                const response = await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  body: body,
+                  attachments: attachments
+                });
+                console.log('Comment created successfully');
+                return response;
+              } catch (error) {
+                console.error('Error creating comment:', error);
+                throw error;
+              }
+            }
+            
+            // Main execution
+            try {
+              const drawioFiles = await findDrawioFiles('pr-version/diagrams');
+              await createCommentWithAttachments(drawioFiles);
+            } catch (error) {
+              console.error('Error in main execution:', error);
+              throw error;
+            }
