@@ -14,7 +14,6 @@ jobs:
     env:
       GIT_DISCOVERY_ACROSS_FILESYSTEM: 1
     steps:
-      # First checkout - PR version
       - name: Checkout PR
         uses: actions/checkout@v3
         with:
@@ -30,7 +29,6 @@ jobs:
           output: diagrams/drawio-assets
           path: pr-version
 
-      # Second checkout - Base version
       - name: Checkout base branch
         uses: actions/checkout@v3
         with:
@@ -51,7 +49,7 @@ jobs:
           {
             echo "### Draw.io Diagram Changes"
             echo
-            for file in $(find pr-version/diagrams -name "*.drawio"); do
+            for file in $(find pr-version -name "*.drawio"); do
               filename=$(basename "$file")
               base_name="${filename%.*}"
               
@@ -60,33 +58,68 @@ jobs:
               
               echo "#### ${filename}"
               echo
+              
+              # Debug information
+              echo "<details><summary>Debug Info</summary>"
+              echo
+              echo "Looking for old version at: $OLD_PATH"
+              echo "Looking for new version at: $NEW_PATH"
+              echo
+              if [ -f "$OLD_PATH" ]; then
+                echo "✅ Old version found"
+                ls -l "$OLD_PATH"
+              else
+                echo "❌ Old version not found"
+                echo "Contents of base-version/diagrams/drawio-assets:"
+                ls -la base-version/diagrams/drawio-assets || echo "Directory not found"
+              fi
+              echo
+              if [ -f "$NEW_PATH" ]; then
+                echo "✅ New version found"
+                ls -l "$NEW_PATH"
+              else
+                echo "❌ New version not found"
+                echo "Contents of pr-version/diagrams/drawio-assets:"
+                ls -la pr-version/diagrams/drawio-assets || echo "Directory not found"
+              fi
+              echo "</details>"
+              echo
+              
               echo "**Before:**"
               if [ -f "$OLD_PATH" ]; then
-                old_image=$(base64 -w 0 "$OLD_PATH")
-                echo "<img src=\"data:image/png;base64,${old_image}\" width=\"500\">"
+                echo
+                echo "\`\`\`"
+                echo "![Old Version]($OLD_PATH)"
+                echo "\`\`\`"
+                echo
               else
-                echo "❌ Old version not found at: $OLD_PATH"
+                echo "❌ Old version not found"
               fi
               echo
               echo "**After:**"
               if [ -f "$NEW_PATH" ]; then
-                new_image=$(base64 -w 0 "$NEW_PATH")
-                echo "<img src=\"data:image/png;base64,${new_image}\" width=\"500\">"
+                echo
+                echo "\`\`\`"
+                echo "![New Version]($NEW_PATH)"
+                echo "\`\`\`"
+                echo
               else
-                echo "❌ New version not found at: $NEW_PATH"
+                echo "❌ New version not found"
               fi
               echo
               echo "---"
               echo
             done
           } > comment.md
-          
-          echo 'COMMENT<<EOF' >> $GITHUB_ENV
-          cat comment.md >> $GITHUB_ENV
-          echo 'EOF' >> $GITHUB_ENV
+
+          body=$(cat comment.md)
+          body="${body//'%'/'%25'}"
+          body="${body//$'\n'/'%0A'}"
+          body="${body//$'\r'/'%0D'}"
+          echo "comment=$body" >> $GITHUB_OUTPUT
 
       - name: Create or Update Comment
         uses: peter-evans/create-or-update-comment@v3
         with:
           issue-number: ${{ github.event.pull_request.number }}
-          body: ${{ env.COMMENT }}
+          body: ${{ steps.generate-comment.outputs.comment }}
