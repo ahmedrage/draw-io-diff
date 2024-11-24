@@ -43,41 +43,47 @@ jobs:
           output: exported-diagrams
           path: base-version
 
-      # Create a temporary branch to store the images
-      - name: Setup Git
+      # Create a new directory for storing images and initialize git
+      - name: Prepare git repository for images
         run: |
+          # Create and move to a new directory for the image repository
+          mkdir image-repository
+          cd image-repository
+          
+          # Initialize git
+          git init
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-
-      - name: Create or update images branch
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Try to fetch the existing branch
+          
+          # Set up remote
+          git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          
+          # Try to fetch existing branch
           git fetch origin pr-${{ github.event.pull_request.number }}-diagrams || true
           
           # Create or switch to the branch
-          if git checkout pr-${{ github.event.pull_request.number }}-diagrams 2>/dev/null; then
+          if git fetch origin pr-${{ github.event.pull_request.number }}-diagrams; then
+            git checkout pr-${{ github.event.pull_request.number }}-diagrams
             echo "Branch exists, updating..."
           else
+            git checkout --orphan pr-${{ github.event.pull_request.number }}-diagrams
             echo "Creating new branch..."
-            git checkout -b pr-${{ github.event.pull_request.number }}-diagrams
           fi
           
           # Create directory for the images
-          mkdir -p pr-${github.event.pull_request.number}-images
+          mkdir -p pr-${{ github.event.pull_request.number }}-images
           
-          # Copy the exported images with distinct names
-          for file in $(find pr-version -name "*.drawio"); do
+          # Copy the exported images
+          for file in $(find ../pr-version -name "*.drawio"); do
             filename=$(basename "$file")
             base_name="${filename%.*}"
             
-            cp "base-version/diagrams/exported-diagrams/${base_name}-Page-1.png" "pr-${github.event.pull_request.number}-images/${base_name}-before.png" || true
-            cp "pr-version/diagrams/exported-diagrams/${base_name}-Page-1.png" "pr-${github.event.pull_request.number}-images/${base_name}-after.png" || true
+            cp "../base-version/diagrams/exported-diagrams/${base_name}-Page-1.png" "pr-${{ github.event.pull_request.number }}-images/${base_name}-before.png" || true
+            cp "../pr-version/diagrams/exported-diagrams/${base_name}-Page-1.png" "pr-${{ github.event.pull_request.number }}-images/${base_name}-after.png" || true
           done
           
-          # Commit and push the images
-          git add pr-${github.event.pull_request.number}-images/
+          # Stage and commit changes
+          git add .
           git commit -m "Update diagram comparison images for PR #${{ github.event.pull_request.number }}" || true
           git push origin pr-${{ github.event.pull_request.number }}-diagrams --force
 
