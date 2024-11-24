@@ -1,40 +1,78 @@
-name: Keep draw.io export synchronized
+name: Draw.io PR Diagram Comparison
 on:
-  push:
-    branches:
-      - main
+  pull_request:
     paths:
       - "**.drawio"
-      - .github/workflows/drawio-export.yml
-concurrency:
-  group: drawio-export-${{ github.ref }}
-  cancel-in-progress: true
+
 jobs:
-  drawio-export:
+  compare-diagrams:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout sources
+      - name: Checkout PR
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.event.pull_request.head.sha }}
 
-      - name: Export drawio files to asciidoctor and png files
+      - name: Export new diagram version
         uses: rlespinasse/drawio-export-action@v2
         with:
-          format: adoc
+          format: png
           transparent: true
-          output: drawio-assets
+          output: new-diagrams
 
-      - name: Get author and committer info from HEAD commit
-        uses: rlespinasse/git-commit-data-action@v1
-        if: github.ref == 'refs/heads/main'
-
-      - name: Commit changed files
-        uses: stefanzweifel/git-auto-commit-action@v4
+      - name: Checkout base branch
+        uses: actions/checkout@v3
         with:
-          commit_message: "docs: sync draw.io exported files"
-          commit_user_name: "${{ env.GIT_COMMIT_COMMITTER_NAME }}"
-          commit_user_email: "${{ env.GIT_COMMIT_COMMITTER_EMAIL }}"
-          commit_author: "${{ env.GIT_COMMIT_AUTHOR }}"
-        if: github.ref == 'refs/heads/main'
+          ref: ${{ github.event.pull_request.base.sha }}
+          clean: true
+
+      - name: Export old diagram version
+        uses: rlespinasse/drawio-export-action@v2
+        with:
+          format: png
+          transparent: true
+          output: old-diagrams
+
+      - name: Find changed diagrams
+        id: changed-files
+        uses: tj-actions/changed-files@v41
+        with:
+          files: |
+            **.drawio
+
+      - name: Generate comparison comment
+        id: generate-comment
+        run: |
+          comment="### Draw.io Diagram Changes\n\n"
+          for file in ${{ steps.changed-files.outputs.all_changed_files }}; do
+            filename=$(basename "$file")
+            base_name="${filename%.*}"
+            
+            # Convert images to base64
+            old_image=$(base64 -w 0 "old-diagrams/${base_name}.png")
+            new_image=$(base64 -w 0 "new-diagrams/${base_name}.png")
+            
+            comment="${comment}#### ${filename}\n\n"
+            comment="${comment}**Before:**\n"
+            comment="${comment}<img src=\"data:image/png;base64,${old_image}\" width=\"500\">\n\n"
+            comment="${comment}**After:**\n"
+            comment="${comment}<img src=\"data:image/png;base64,${new_image}\" width=\"500\">\n\n"
+            comment="${comment}---\n\n"
+          done
+          
+          echo "comment<<EOF" >> $GITHUB_OUTPUT
+          echo "$comment" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Comment on PR
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const comment = `${{ steps.generate-comment.outputs.comment }}`;
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.name,
+              body: comment
+            });
