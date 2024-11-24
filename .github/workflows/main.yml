@@ -45,16 +45,24 @@ jobs:
 
       - name: Setup storage branch
         run: |
-          # Setup git
+          # Create and move to a new directory for the storage repository
+          mkdir storage-repo
+          cd storage-repo
+          
+          # Initialize git and configure
+          git init
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
           
-          # Create and switch to storage branch
+          # Add remote
+          git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          
+          # Try to fetch the storage branch
           if git fetch origin $STORAGE_BRANCH; then
             git checkout $STORAGE_BRANCH
           else
             git checkout --orphan $STORAGE_BRANCH
-            git rm -rf .
+            git rm -rf . || true
             git commit --allow-empty -m "Initialize diagram storage branch"
           fi
           
@@ -62,12 +70,12 @@ jobs:
           mkdir -p pr-${{ github.event.pull_request.number }}
           
           # Copy the exported images
-          for file in $(find pr-version -name "*.drawio"); do
+          for file in $(find ../pr-version -name "*.drawio"); do
             filename=$(basename "$file")
             base_name="${filename%.*}"
             
-            cp "base-version/diagrams/exported-diagrams/${base_name}-Page-1.png" "pr-${{ github.event.pull_request.number }}/${base_name}-before.png" || true
-            cp "pr-version/diagrams/exported-diagrams/${base_name}-Page-1.png" "pr-${{ github.event.pull_request.number }}/${base_name}-after.png" || true
+            cp "../base-version/diagrams/exported-diagrams/${base_name}-Page-1.png" "pr-${{ github.event.pull_request.number }}/${base_name}-before.png" || true
+            cp "../pr-version/diagrams/exported-diagrams/${base_name}-Page-1.png" "pr-${{ github.event.pull_request.number }}/${base_name}-after.png" || true
           done
           
           # Commit and push changes
