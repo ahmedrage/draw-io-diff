@@ -55,15 +55,8 @@ jobs:
               filename=$(basename "$file")
               base_name="${filename%.*}"
               
-              echo "Processing file: $filename" >&2
-              echo "Base name: $base_name" >&2
-              
               OLD_PATH="base-version/diagrams/drawio-assets/${base_name}-Page-1.png"
               NEW_PATH="pr-version/diagrams/drawio-assets/${base_name}-Page-1.png"
-              
-              echo "Checking paths:" >&2
-              ls -l "$OLD_PATH" || echo "Old file not found at: $OLD_PATH" >&2
-              ls -l "$NEW_PATH" || echo "New file not found at: $NEW_PATH" >&2
               
               echo "#### ${filename}"
               echo
