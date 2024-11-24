@@ -26,7 +26,7 @@ jobs:
         with:
           format: png
           transparent: true
-          output: diagrams/drawio-assets
+          output: exported-diagrams
           path: pr-version
 
       - name: Checkout base branch
@@ -40,15 +40,11 @@ jobs:
         with:
           format: png
           transparent: true
-          output: diagrams/drawio-assets
+          output: exported-diagrams
           path: base-version
 
       - name: Generate comparison comment
         id: generate-comment
-        env:
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          REPO: ${{ github.repository }}
         run: |
           {
             echo "### Draw.io Diagram Changes"
@@ -56,18 +52,30 @@ jobs:
             for file in $(find pr-version -name "*.drawio"); do
               filename=$(basename "$file")
               base_name="${filename%.*}"
-              rel_path="diagrams/drawio-assets/${base_name}-Page-1.png"
+              
+              OLD_PATH="base-version/exported-diagrams/${base_name}-Page-1.png"
+              NEW_PATH="pr-version/exported-diagrams/${base_name}-Page-1.png"
               
               echo "#### ${filename}"
               echo
               
               echo "**Before:**"
               echo
-              echo "<img src=\"https://raw.githubusercontent.com/${REPO}/${PR_BASE_SHA}/${rel_path}\" width=\"500\" />"
+              if [ -f "$OLD_PATH" ]; then
+                OLD_IMG=$(base64 -w 0 "$OLD_PATH")
+                echo "<img src=\"data:image/png;base64,${OLD_IMG}\" width=\"500\" />"
+              else
+                echo "❌ Old version not found"
+              fi
               echo
               echo "**After:**"
               echo
-              echo "<img src=\"https://raw.githubusercontent.com/${REPO}/${PR_HEAD_SHA}/${rel_path}\" width=\"500\" />"
+              if [ -f "$NEW_PATH" ]; then
+                NEW_IMG=$(base64 -w 0 "$NEW_PATH")
+                echo "<img src=\"data:image/png;base64,${NEW_IMG}\" width=\"500\" />"
+              else
+                echo "❌ New version not found"
+              fi
               echo
               echo "---"
               echo
