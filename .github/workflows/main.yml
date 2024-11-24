@@ -43,61 +43,20 @@ jobs:
           output: exported-diagrams
           path: base-version
 
-      - name: Debug file structure
-        run: |
-          echo "=== PR Version Directory Structure ==="
-          ls -R pr-version
-          echo
-          echo "=== Base Version Directory Structure ==="
-          ls -R base-version
-          echo
-          echo "=== Draw.io Files Found ==="
-          find . -name "*.drawio"
-          echo
-          echo "=== Exported PNG Files Found ==="
-          find . -name "*.png"
-
       - name: Generate comparison comment
         id: generate-comment
         run: |
           {
             echo "### Draw.io Diagram Changes"
             echo
-            echo "<details><summary>📁 Debug Information</summary>"
-            echo
-            echo "\`\`\`"
-            echo "=== PR Version Files ==="
-            ls -R pr-version || echo "No files found in pr-version"
-            echo
-            echo "=== Base Version Files ==="
-            ls -R base-version || echo "No files found in base-version"
-            echo
-            echo "=== Draw.io Files Found ==="
-            find . -name "*.drawio" || echo "No .drawio files found"
-            echo
-            echo "=== Exported PNG Files ==="
-            find . -name "*.png" || echo "No PNG files found"
-            echo "\`\`\`"
-            echo "</details>"
-            echo
-
             for file in $(find pr-version -name "*.drawio"); do
               filename=$(basename "$file")
               base_name="${filename%.*}"
               
-              # Get relative path from the drawio file to construct correct export path
-              rel_path=$(dirname "${file#pr-version/}")
-              
-              OLD_PATH="base-version/exported-diagrams/${rel_path}/${base_name}-Page-1.png"
-              NEW_PATH="pr-version/exported-diagrams/${rel_path}/${base_name}-Page-1.png"
+              OLD_PATH="base-version/diagrams/exported-diagrams/${base_name}-Page-1.png"
+              NEW_PATH="pr-version/diagrams/exported-diagrams/${base_name}-Page-1.png"
               
               echo "#### ${filename}"
-              echo
-              echo "<details><summary>🔍 File Paths</summary>"
-              echo
-              echo "Looking for old version at: \`$OLD_PATH\`"
-              echo "Looking for new version at: \`$NEW_PATH\`"
-              echo "</details>"
               echo
               
               echo "**Before:**"
