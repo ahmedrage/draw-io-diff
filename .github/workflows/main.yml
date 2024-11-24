@@ -4,11 +4,16 @@ on:
     paths:
       - "**.drawio"
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   compare-diagrams:
     runs-on: ubuntu-latest
+    env:
+      GIT_DISCOVERY_ACROSS_FILESYSTEM: 1
     steps:
-      # First checkout - PR version
       - name: Checkout PR
         uses: actions/checkout@v3
         with:
@@ -21,10 +26,9 @@ jobs:
         with:
           format: png
           transparent: true
-          output: pr-version/new-diagrams
+          output: diagrams/drawio-assets
           path: pr-version
 
-      # Second checkout - Base version
       - name: Checkout base branch
         uses: actions/checkout@v3
         with:
@@ -36,49 +40,42 @@ jobs:
         with:
           format: png
           transparent: true
-          output: base-version/old-diagrams
+          output: diagrams/drawio-assets
           path: base-version
-
-      - name: Find changed diagrams
-        id: changed-files
-        uses: tj-actions/changed-files@v41
-        with:
-          files: |
-            **.drawio
-          path: pr-version
 
       - name: Generate comparison comment
         id: generate-comment
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          REPO: ${{ github.repository }}
         run: |
-          comment="### Draw.io Diagram Changes\n\n"
-          for file in ${{ steps.changed-files.outputs.all_changed_files }}; do
-            filename=$(basename "$file")
-            base_name="${filename%.*}"
-            
-            # Adjust paths to account for the new directory structure
-            old_image=$(base64 -w 0 "base-version/old-diagrams/${base_name}.png")
-            new_image=$(base64 -w 0 "pr-version/new-diagrams/${base_name}.png")
-            
-            comment="${comment}#### ${filename}\n\n"
-            comment="${comment}**Before:**\n"
-            comment="${comment}<img src=\"data:image/png;base64,${old_image}\" width=\"500\">\n\n"
-            comment="${comment}**After:**\n"
-            comment="${comment}<img src=\"data:image/png;base64,${new_image}\" width=\"500\">\n\n"
-            comment="${comment}---\n\n"
-          done
-          
-          echo "comment<<EOF" >> $GITHUB_OUTPUT
-          echo "$comment" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          {
+            echo "### Draw.io Diagram Changes"
+            echo
+            for file in $(find pr-version -name "*.drawio"); do
+              filename=$(basename "$file")
+              base_name="${filename%.*}"
+              rel_path="diagrams/drawio-assets/${base_name}-Page-1.png"
+              
+              echo "#### ${filename}"
+              echo
+              
+              echo "**Before:**"
+              echo
+              echo "<img src=\"https://raw.githubusercontent.com/${REPO}/${PR_BASE_SHA}/${rel_path}\" width=\"500\" />"
+              echo
+              echo "**After:**"
+              echo
+              echo "<img src=\"https://raw.githubusercontent.com/${REPO}/${PR_HEAD_SHA}/${rel_path}\" width=\"500\" />"
+              echo
+              echo "---"
+              echo
+            done
+          } > comment.md
 
-      - name: Comment on PR
-        uses: actions/github-script@v6
+      - name: Create or Update Comment
+        uses: peter-evans/create-or-update-comment@v3
         with:
-          script: |
-            const comment = `${{ steps.generate-comment.outputs.comment }}`;
-            await github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.name,
-              body: comment
-            });
+          issue-number: ${{ github.event.pull_request.number }}
+          body-file: comment.md
