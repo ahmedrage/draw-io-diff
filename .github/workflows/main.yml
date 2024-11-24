@@ -5,7 +5,7 @@ on:
       - "**.drawio"
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
 
 jobs:
@@ -43,8 +43,49 @@ jobs:
           output: exported-diagrams
           path: base-version
 
+      # Create a temporary branch to store the images
+      - name: Setup Git
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+      - name: Create or update images branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Try to fetch the existing branch
+          git fetch origin pr-${{ github.event.pull_request.number }}-diagrams || true
+          
+          # Create or switch to the branch
+          if git checkout pr-${{ github.event.pull_request.number }}-diagrams 2>/dev/null; then
+            echo "Branch exists, updating..."
+          else
+            echo "Creating new branch..."
+            git checkout -b pr-${{ github.event.pull_request.number }}-diagrams
+          fi
+          
+          # Create directory for the images
+          mkdir -p pr-${github.event.pull_request.number}-images
+          
+          # Copy the exported images with distinct names
+          for file in $(find pr-version -name "*.drawio"); do
+            filename=$(basename "$file")
+            base_name="${filename%.*}"
+            
+            cp "base-version/diagrams/exported-diagrams/${base_name}-Page-1.png" "pr-${github.event.pull_request.number}-images/${base_name}-before.png" || true
+            cp "pr-version/diagrams/exported-diagrams/${base_name}-Page-1.png" "pr-${github.event.pull_request.number}-images/${base_name}-after.png" || true
+          done
+          
+          # Commit and push the images
+          git add pr-${github.event.pull_request.number}-images/
+          git commit -m "Update diagram comparison images for PR #${{ github.event.pull_request.number }}" || true
+          git push origin pr-${{ github.event.pull_request.number }}-diagrams --force
+
       - name: Generate comparison comment
         id: generate-comment
+        env:
+          REPO: ${{ github.repository }}
+          BRANCH: pr-${{ github.event.pull_request.number }}-diagrams
         run: |
           {
             echo "### Draw.io Diagram Changes"
@@ -53,29 +94,16 @@ jobs:
               filename=$(basename "$file")
               base_name="${filename%.*}"
               
-              OLD_PATH="base-version/diagrams/exported-diagrams/${base_name}-Page-1.png"
-              NEW_PATH="pr-version/diagrams/exported-diagrams/${base_name}-Page-1.png"
-              
               echo "#### ${filename}"
               echo
               
               echo "**Before:**"
               echo
-              if [ -f "$OLD_PATH" ]; then
-                OLD_IMG=$(base64 -w 0 "$OLD_PATH")
-                echo "<img src=\"data:image/png;base64,${OLD_IMG}\" width=\"500\" />"
-              else
-                echo "❌ Old version not found at: $OLD_PATH"
-              fi
+              echo "<img src=\"https://raw.githubusercontent.com/${REPO}/${BRANCH}/pr-${github.event.pull_request.number}-images/${base_name}-before.png\" width=\"500\" />"
               echo
               echo "**After:**"
               echo
-              if [ -f "$NEW_PATH" ]; then
-                NEW_IMG=$(base64 -w 0 "$NEW_PATH")
-                echo "<img src=\"data:image/png;base64,${NEW_IMG}\" width=\"500\" />"
-              else
-                echo "❌ New version not found at: $NEW_PATH"
-              fi
+              echo "<img src=\"https://raw.githubusercontent.com/${REPO}/${BRANCH}/pr-${github.event.pull_request.number}-images/${base_name}-after.png\" width=\"500\" />"
               echo
               echo "---"
               echo
