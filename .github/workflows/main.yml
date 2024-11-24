@@ -1,0 +1,44 @@
+            - name: Draw.io Export Action
+  # You may pin to the exact commit or the version.
+  # uses: rlespinasse/drawio-export-action@0bd775f6fd2471e6662e1473fcc33cb8fbb7b28f
+  uses: rlespinasse/drawio-export-action@v2.24.0
+  with:
+    # Path to the drawio files to export
+    path: # optional, default is .
+    # Exported format [default: pdf] [possible values: adoc, md, jpg, pdf, png, svg, vsdx, xml]
+    format: # optional, default is pdf
+    # Exported folder name
+    output: # optional, default is export
+    # Remove page suffix when possible (in case of single page file)
+    remove-page-suffix: # optional
+    # Sets the border width around the diagram
+    border: # optional, default is 0
+    # Scales the diagram size
+    scale: # optional
+    # Enable Plugins
+    enable-plugins: # optional
+    # Fits the generated image/pdf into the specified width, preserves aspect ratio
+    width: # optional
+    # Fits the generated image/pdf into the specified height, preserves aspect ratio
+    height: # optional
+    # crops PDF to diagram size
+    crop: # optional
+    # Includes a copy of the diagram for PDF, PNG, or SVG
+    embed-diagram: # optional
+    # Set transparent background for PNG
+    transparent: # optional
+    # Output image quality for JPEG
+    quality: # optional, default is 90
+    # Uncompressed XML output
+    uncompressed: # optional
+    # Embed Images in SVG file
+    embed-svg-images: # optional
+    # Export mode for this action [default: auto] [possible values: auto, recent, all, reference]
+    action-mode: # default is auto
+    # Git Reference serving as base for export (only when action-mode is reference)
+    since-reference: # optional
+    # [internal] to get 'before' value on 'push' event
+    internal_push_before: # default is ${{ github.event.before }}
+    # [internal] to get 'forced' value on 'push' event
+    internal_push_forced: # default is ${{ github.event.forced }}
+          
