@@ -43,7 +43,6 @@ jobs:
           output: exported-diagrams
           path: base-version
 
-      # Create a new directory for storing images and initialize git
       - name: Prepare git repository for images
         run: |
           # Create and move to a new directory for the image repository
@@ -91,30 +90,33 @@ jobs:
         id: generate-comment
         env:
           REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
           BRANCH: pr-${{ github.event.pull_request.number }}-diagrams
         run: |
-          {
-            echo "### Draw.io Diagram Changes"
-            echo
-            for file in $(find pr-version -name "*.drawio"); do
-              filename=$(basename "$file")
-              base_name="${filename%.*}"
-              
-              echo "#### ${filename}"
-              echo
-              
-              echo "**Before:**"
-              echo
-              echo "<img src=\"https://raw.githubusercontent.com/${REPO}/${BRANCH}/pr-${github.event.pull_request.number}-images/${base_name}-before.png\" width=\"500\" />"
-              echo
-              echo "**After:**"
-              echo
-              echo "<img src=\"https://raw.githubusercontent.com/${REPO}/${BRANCH}/pr-${github.event.pull_request.number}-images/${base_name}-after.png\" width=\"500\" />"
-              echo
-              echo "---"
-              echo
-            done
-          } > comment.md
+          cat > comment.md << 'EOL'
+          ### Draw.io Diagram Changes
+
+          EOL
+          
+          for file in $(find pr-version -name "*.drawio"); do
+            filename=$(basename "$file")
+            base_name="${filename%.*}"
+            
+            cat >> comment.md << EOF
+          #### ${filename}
+          
+          **Before:**
+          
+          <img src="https://raw.githubusercontent.com/$REPO/$BRANCH/pr-$PR_NUMBER-images/${base_name}-before.png" width="500" />
+          
+          **After:**
+          
+          <img src="https://raw.githubusercontent.com/$REPO/$BRANCH/pr-$PR_NUMBER-images/${base_name}-after.png" width="500" />
+          
+          ---
+          
+          EOF
+          done
 
       - name: Create or Update Comment
         uses: peter-evans/create-or-update-comment@v3
