@@ -1,0 +1,4 @@
+= test-diagram Page-1
+
+image::test-diagram-Page-1.png[Page-1]
+
