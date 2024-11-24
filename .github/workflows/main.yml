@@ -43,67 +43,31 @@ jobs:
           output: diagrams/drawio-assets
           path: base-version
 
-      # Create a directory for all images
-      - name: Prepare images directory
-        run: |
-          mkdir -p comparison-images
-          for file in $(find pr-version -name "*.drawio"); do
-            filename=$(basename "$file")
-            base_name="${filename%.*}"
-            
-            OLD_PATH="base-version/diagrams/drawio-assets/${base_name}-Page-1.png"
-            NEW_PATH="pr-version/diagrams/drawio-assets/${base_name}-Page-1.png"
-            
-            if [ -f "$OLD_PATH" ]; then
-              cp "$OLD_PATH" "comparison-images/${base_name}-before.png"
-            fi
-            
-            if [ -f "$NEW_PATH" ]; then
-              cp "$NEW_PATH" "comparison-images/${base_name}-after.png"
-            fi
-          done
-
-      # Upload the images as artifacts
-      - name: Upload comparison images
-        uses: actions/upload-artifact@v3
-        with:
-          name: diagram-comparisons
-          path: comparison-images
-          retention-days: 1
-
-      # Get the artifact URL
-      - name: Get artifact URL
-        id: artifact-url
-        run: |
-          REPO="${GITHUB_REPOSITORY}"
-          RUN_ID="${GITHUB_RUN_ID}"
-          echo "ARTIFACT_URL=https://github.com/${REPO}/actions/runs/${RUN_ID}/artifacts" >> $GITHUB_ENV
-
       - name: Generate comparison comment
         id: generate-comment
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          REPO: ${{ github.repository }}
         run: |
           {
             echo "### Draw.io Diagram Changes"
             echo
-            echo "🔍 [View all diagram comparisons as artifacts](${ARTIFACT_URL})"
-            echo
             for file in $(find pr-version -name "*.drawio"); do
               filename=$(basename "$file")
               base_name="${filename%.*}"
+              rel_path="diagrams/drawio-assets/${base_name}-Page-1.png"
               
               echo "#### ${filename}"
               echo
-              echo "<details><summary>🔄 Click to view changes</summary>"
+              
+              echo "**Before:**"
               echo
-              echo "The images have been uploaded as artifacts to preserve the comparison."
-              echo "You can download and view them from the artifacts section of this workflow run:"
+              echo "<img src=\"https://raw.githubusercontent.com/${REPO}/${PR_BASE_SHA}/${rel_path}\" width=\"500\" />"
               echo
-              echo "- Before: \`${base_name}-before.png\`"
-              echo "- After: \`${base_name}-after.png\`"
+              echo "**After:**"
               echo
-              echo "➡️ [Download artifacts](${ARTIFACT_URL})"
-              echo
-              echo "</details>"
+              echo "<img src=\"https://raw.githubusercontent.com/${REPO}/${PR_HEAD_SHA}/${rel_path}\" width=\"500\" />"
               echo
               echo "---"
               echo
