@@ -54,43 +54,53 @@ jobs:
       - name: Generate comparison comment
         id: generate-comment
         run: |
-          comment="### Draw.io Diagram Changes\n\n"
-          for file in ${{ steps.changed-files.outputs.all_changed_files }}; do
-            filename=$(basename "$file")
-            base_name="${filename%.*}"
-            
-            echo "Processing file: $filename"
-            echo "Base name: $base_name"
-            
-            OLD_PATH="base-version/diagrams/old-diagrams/${base_name}-Page-1.png"
-            NEW_PATH="pr-version/diagrams/new-diagrams/${base_name}-Page-1.png"
-            
-            if [ -f "$OLD_PATH" ]; then
-              old_image=$(base64 -w 0 "$OLD_PATH")
-            else
-              echo "Warning: Could not find old image at $OLD_PATH"
-              old_image=""
-            fi
-            
-            if [ -f "$NEW_PATH" ]; then
-              new_image=$(base64 -w 0 "$NEW_PATH")
-            else
-              echo "Warning: Could not find new image at $NEW_PATH"
-              new_image=""
-            fi
-            
-            comment="${comment}#### ${filename}\n\n"
-            comment="${comment}**Before:**\n"
-            comment="${comment}<img src=\"data:image/png;base64,${old_image}\" width=\"500\">\n\n"
-            comment="${comment}**After:**\n"
-            comment="${comment}<img src=\"data:image/png;base64,${new_image}\" width=\"500\">\n\n"
-            comment="${comment}---\n\n"
-          done
+          # Create a temporary file to store our markdown
+          {
+            echo "### Draw.io Diagram Changes"
+            echo
+            for file in ${{ steps.changed-files.outputs.all_changed_files }}; do
+              filename=$(basename "$file")
+              base_name="${filename%.*}"
+              
+              echo "Processing file: $filename" >&2
+              echo "Base name: $base_name" >&2
+              
+              OLD_PATH="base-version/diagrams/old-diagrams/${base_name}-Page-1.png"
+              NEW_PATH="pr-version/diagrams/new-diagrams/${base_name}-Page-1.png"
+              
+              echo "#### ${filename}"
+              echo
+              echo "**Before:**"
+              if [ -f "$OLD_PATH" ]; then
+                echo "<img src=\"data:image/png;base64,$(base64 -w 0 "$OLD_PATH")\" width=\"500\">"
+              else
+                echo "Image not found"
+              fi
+              echo
+              echo "**After:**"
+              if [ -f "$NEW_PATH" ]; then
+                echo "<img src=\"data:image/png;base64,$(base64 -w 0 "$NEW_PATH")\" width=\"500\">"
+              else
+                echo "Image not found"
+              fi
+              echo
+              echo "---"
+              echo
+            done
+          } > comment.md
           
-          echo "comment=${comment}" >> $GITHUB_ENV
+          # Save the comment content as a string that preserves newlines
+          echo 'COMMENT<<EOF' >> $GITHUB_ENV
+          cat comment.md >> $GITHUB_ENV
+          echo 'EOF' >> $GITHUB_ENV
+
+      - name: Debug Comment Content
+        run: |
+          echo "Content of comment.md:"
+          cat comment.md
 
       - name: Create or Update Comment
         uses: peter-evans/create-or-update-comment@v3
         with:
           issue-number: ${{ github.event.pull_request.number }}
-          body: ${{ env.comment }}
+          body: ${{ env.COMMENT }}
