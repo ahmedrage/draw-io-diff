@@ -12,7 +12,7 @@ jobs:
   compare-diagrams:
     runs-on: ubuntu-latest
     env:
-      STORAGE_BRANCH: diagram-storage # single branch for all PR images
+      STORAGE_BRANCH: diagram-storage
     steps:
       - name: Checkout PR
         uses: actions/checkout@v3
@@ -21,13 +21,33 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           path: pr-version
 
-      - name: Export new diagram version
-        uses: rlespinasse/drawio-export-action@v2
+      # First find all drawio files and export them
+      - name: Find and export new diagrams
+        uses: actions/github-script@v7
         with:
-          format: png
-          transparent: true
-          output: exported-diagrams
-          path: pr-version
+          script: |
+            const { execSync } = require('child_process');
+            const fs = require('fs');
+            const path = require('path');
+            
+            // Find all .drawio files
+            const files = execSync('find pr-version -name "*.drawio"')
+              .toString()
+              .trim()
+              .split('\n')
+              .filter(Boolean);
+            
+            // Export each file
+            for (const file of files) {
+              const dir = path.dirname(file);
+              const exportDir = path.join(dir, 'exported-diagrams');
+              
+              // Create export directory if it doesn't exist
+              fs.mkdirSync(exportDir, { recursive: true });
+              
+              // Use drawio-export-action for this specific file
+              execSync(`npx @drawio/export-cli ${file} -o ${exportDir} --format png --transparent`);
+            }
 
       - name: Checkout base branch
         uses: actions/checkout@v3
@@ -35,13 +55,33 @@ jobs:
           ref: ${{ github.event.pull_request.base.sha }}
           path: base-version
 
-      - name: Export old diagram version
-        uses: rlespinasse/drawio-export-action@v2
+      # Export base version diagrams
+      - name: Find and export base diagrams
+        uses: actions/github-script@v7
         with:
-          format: png
-          transparent: true
-          output: exported-diagrams
-          path: base-version
+          script: |
+            const { execSync } = require('child_process');
+            const fs = require('fs');
+            const path = require('path');
+            
+            // Find all .drawio files in base version
+            const files = execSync('find base-version -name "*.drawio"')
+              .toString()
+              .trim()
+              .split('\n')
+              .filter(Boolean);
+            
+            // Export each file
+            for (const file of files) {
+              const dir = path.dirname(file);
+              const exportDir = path.join(dir, 'exported-diagrams');
+              
+              // Create export directory if it doesn't exist
+              fs.mkdirSync(exportDir, { recursive: true });
+              
+              // Use drawio-export-action for this specific file
+              execSync(`npx @drawio/export-cli ${file} -o ${exportDir} --format png --transparent`);
+            }
 
       - name: Setup storage branch
         run: |
@@ -68,54 +108,92 @@ jobs:
           
           # Create PR-specific directory
           mkdir -p pr-${{ github.event.pull_request.number }}
-          
-          # Copy the exported images
-          for file in $(find ../pr-version -name "*.drawio"); do
-            filename=$(basename "$file")
-            base_name="${filename%.*}"
+
+      - name: Copy images to storage
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { execSync } = require('child_process');
+            const fs = require('fs');
+            const path = require('path');
             
-            cp "../base-version/diagrams/exported-diagrams/${base_name}-Page-1.png" "pr-${{ github.event.pull_request.number }}/${base_name}-before.png" || true
-            cp "../pr-version/diagrams/exported-diagrams/${base_name}-Page-1.png" "pr-${{ github.event.pull_request.number }}/${base_name}-after.png" || true
-          done
-          
-          # Commit and push changes
+            // Find all .drawio files to know what to copy
+            const files = execSync('find pr-version -name "*.drawio"')
+              .toString()
+              .trim()
+              .split('\n')
+              .filter(Boolean);
+            
+            for (const file of files) {
+              const filename = path.basename(file);
+              const baseName = path.basename(file, '.drawio');
+              const dirName = path.dirname(file).replace('pr-version/', '');
+              
+              // Create a unique name that includes the path to avoid conflicts
+              const safeDirName = dirName.replace(/\//g, '-');
+              const uniqueBaseName = `${safeDirName}-${baseName}`.replace(/^-/, '');
+              
+              const beforePath = path.join('base-version', dirName, 'exported-diagrams', `${baseName}-Page-1.png`);
+              const afterPath = path.join('pr-version', dirName, 'exported-diagrams', `${baseName}-Page-1.png`);
+              const storageDir = `storage-repo/pr-${process.env.PR_NUMBER}`;
+              
+              // Copy files if they exist
+              if (fs.existsSync(beforePath)) {
+                execSync(`cp "${beforePath}" "${storageDir}/${uniqueBaseName}-before.png"`);
+              }
+              if (fs.existsSync(afterPath)) {
+                execSync(`cp "${afterPath}" "${storageDir}/${uniqueBaseName}-after.png"`);
+              }
+            }
+
+      - name: Commit and push images
+        run: |
+          cd storage-repo
           git add .
           git commit -m "Update diagram comparisons for PR #${{ github.event.pull_request.number }}" || true
           git push origin $STORAGE_BRANCH
 
       - name: Generate comparison comment
-        id: generate-comment
+        uses: actions/github-script@v7
         env:
           REPO: ${{ github.repository }}
+          BRANCH: ${{ env.STORAGE_BRANCH }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          cat > comment.md << 'EOL'
-          ### Draw.io Diagram Changes
-
-          EOL
-          
-          for file in $(find pr-version -name "*.drawio"); do
-            filename=$(basename "$file")
-            base_name="${filename%.*}"
-            
-            cat >> comment.md << EOF
-          #### ${filename}
-          
-          **Before:**
-          
-          <img src="https://raw.githubusercontent.com/$REPO/$STORAGE_BRANCH/pr-$PR_NUMBER/${base_name}-before.png" width="500" />
-          
-          **After:**
-          
-          <img src="https://raw.githubusercontent.com/$REPO/$STORAGE_BRANCH/pr-$PR_NUMBER/${base_name}-after.png" width="500" />
-          
-          ---
-          
-          EOF
-          done
-
-      - name: Create or Update Comment
-        uses: peter-evans/create-or-update-comment@v3
         with:
-          issue-number: ${{ github.event.pull_request.number }}
-          body-file: comment.md
+          script: |
+            const { execSync } = require('child_process');
+            const path = require('path');
+            
+            let body = '### Draw.io Diagram Changes\n\n';
+            
+            // Find all .drawio files
+            const files = execSync('find pr-version -name "*.drawio"')
+              .toString()
+              .trim()
+              .split('\n')
+              .filter(Boolean);
+            
+            for (const file of files) {
+              const filename = path.basename(file);
+              const baseName = path.basename(file, '.drawio');
+              const dirName = path.dirname(file).replace('pr-version/', '');
+              
+              // Create the same unique name used in storage
+              const safeDirName = dirName.replace(/\//g, '-');
+              const uniqueBaseName = `${safeDirName}-${baseName}`.replace(/^-/, '');
+              
+              body += `#### ${dirName}/${filename}\n\n`;
+              body += '**Before:**\n\n';
+              body += `<img src="https://raw.githubusercontent.com/${process.env.REPO}/${process.env.BRANCH}/pr-${process.env.PR_NUMBER}/${uniqueBaseName}-before.png" width="500" />\n\n`;
+              body += '**After:**\n\n';
+              body += `<img src="https://raw.githubusercontent.com/${process.env.REPO}/${process.env.BRANCH}/pr-${process.env.PR_NUMBER}/${uniqueBaseName}-after.png" width="500" />\n\n`;
+              body += '---\n\n';
+            }
+            
+            // Create the comment
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body
+            });
