@@ -43,64 +43,67 @@ jobs:
           output: diagrams/drawio-assets
           path: base-version
 
+      # Create a directory for all images
+      - name: Prepare images directory
+        run: |
+          mkdir -p comparison-images
+          for file in $(find pr-version -name "*.drawio"); do
+            filename=$(basename "$file")
+            base_name="${filename%.*}"
+            
+            OLD_PATH="base-version/diagrams/drawio-assets/${base_name}-Page-1.png"
+            NEW_PATH="pr-version/diagrams/drawio-assets/${base_name}-Page-1.png"
+            
+            if [ -f "$OLD_PATH" ]; then
+              cp "$OLD_PATH" "comparison-images/${base_name}-before.png"
+            fi
+            
+            if [ -f "$NEW_PATH" ]; then
+              cp "$NEW_PATH" "comparison-images/${base_name}-after.png"
+            fi
+          done
+
+      # Upload the images as artifacts
+      - name: Upload comparison images
+        uses: actions/upload-artifact@v3
+        with:
+          name: diagram-comparisons
+          path: comparison-images
+          retention-days: 1
+
+      # Get the artifact URL
+      - name: Get artifact URL
+        id: artifact-url
+        run: |
+          REPO="${GITHUB_REPOSITORY}"
+          RUN_ID="${GITHUB_RUN_ID}"
+          echo "ARTIFACT_URL=https://github.com/${REPO}/actions/runs/${RUN_ID}/artifacts" >> $GITHUB_ENV
+
       - name: Generate comparison comment
         id: generate-comment
         run: |
           {
             echo "### Draw.io Diagram Changes"
             echo
+            echo "🔍 [View all diagram comparisons as artifacts](${ARTIFACT_URL})"
+            echo
             for file in $(find pr-version -name "*.drawio"); do
               filename=$(basename "$file")
               base_name="${filename%.*}"
               
-              OLD_PATH="base-version/diagrams/drawio-assets/${base_name}-Page-1.png"
-              NEW_PATH="pr-version/diagrams/drawio-assets/${base_name}-Page-1.png"
-              
               echo "#### ${filename}"
               echo
-              
-              echo "<details><summary>Debug Info</summary>"
+              echo "<details><summary>🔄 Click to view changes</summary>"
               echo
-              echo "Looking for old version at: $OLD_PATH"
-              echo "Looking for new version at: $NEW_PATH"
+              echo "The images have been uploaded as artifacts to preserve the comparison."
+              echo "You can download and view them from the artifacts section of this workflow run:"
               echo
-              if [ -f "$OLD_PATH" ]; then
-                echo "✅ Old version found"
-                ls -l "$OLD_PATH"
-              else
-                echo "❌ Old version not found"
-                echo "Contents of base-version/diagrams/drawio-assets:"
-                ls -la base-version/diagrams/drawio-assets || echo "Directory not found"
-              fi
+              echo "- Before: \`${base_name}-before.png\`"
+              echo "- After: \`${base_name}-after.png\`"
               echo
-              if [ -f "$NEW_PATH" ]; then
-                echo "✅ New version found"
-                ls -l "$NEW_PATH"
-              else
-                echo "❌ New version not found"
-                echo "Contents of pr-version/diagrams/drawio-assets:"
-                ls -la pr-version/diagrams/drawio-assets || echo "Directory not found"
-              fi
+              echo "➡️ [Download artifacts](${ARTIFACT_URL})"
+              echo
               echo "</details>"
-              echo
-              
-              if [ -f "$OLD_PATH" ]; then
-                OLD_IMG=$(base64 -w 0 "$OLD_PATH")
-                echo "**Before:**"
-                echo
-                echo "<img src=\"data:image/png;base64,${OLD_IMG}\" width=\"500\" />"
-              else
-                echo "**Before:** ❌ Old version not found"
-              fi
-              echo
-              if [ -f "$NEW_PATH" ]; then
-                NEW_IMG=$(base64 -w 0 "$NEW_PATH")
-                echo "**After:**"
-                echo
-                echo "<img src=\"data:image/png;base64,${NEW_IMG}\" width=\"500\" />"
-              else
-                echo "**After:** ❌ New version not found"
-              fi
               echo
               echo "---"
               echo
@@ -111,4 +114,4 @@ jobs:
         uses: peter-evans/create-or-update-comment@v3
         with:
           issue-number: ${{ github.event.pull_request.number }}
-          body-path: comment.md
+          body-file: comment.md
