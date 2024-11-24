@@ -22,19 +22,12 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           path: pr-version
 
-      - name: Init Git for PR Version
-        working-directory: pr-version
-        run: |
-          git config --global --add safe.directory /github/workspace
-          git init
-          git add .
-
       - name: Export new diagram version
         uses: rlespinasse/drawio-export-action@v2
         with:
           format: png
           transparent: true
-          output: diagrams/diagrams/new-diagrams
+          output: diagrams/drawio-assets
           path: pr-version
 
       # Second checkout - Base version
@@ -44,34 +37,13 @@ jobs:
           ref: ${{ github.event.pull_request.base.sha }}
           path: base-version
 
-      - name: Init Git for Base Version
-        working-directory: base-version
-        run: |
-          git config --global --add safe.directory /github/workspace
-          git init
-          git add .
-
       - name: Export old diagram version
         uses: rlespinasse/drawio-export-action@v2
         with:
           format: png
           transparent: true
-          output: diagrams/diagrams/old-diagrams
+          output: diagrams/drawio-assets
           path: base-version
-
-      - name: Find changed files
-        id: changed-files
-        uses: tj-actions/changed-files@v41
-        with:
-          files: |
-            **.drawio
-          path: pr-version
-
-      - name: Debug Info
-        run: |
-          echo "Changed files: ${{ steps.changed-files.outputs.all_changed_files }}"
-          echo "Directory structure:"
-          ls -R
 
       - name: Generate comparison comment
         id: generate-comment
@@ -86,12 +58,12 @@ jobs:
               echo "Processing file: $filename" >&2
               echo "Base name: $base_name" >&2
               
-              OLD_PATH="base-version/diagrams/diagrams/old-diagrams/${base_name}-Page-1.png"
-              NEW_PATH="pr-version/diagrams/diagrams/new-diagrams/${base_name}-Page-1.png"
+              OLD_PATH="base-version/diagrams/drawio-assets/${base_name}-Page-1.png"
+              NEW_PATH="pr-version/diagrams/drawio-assets/${base_name}-Page-1.png"
               
               echo "Checking paths:" >&2
-              ls -l "$OLD_PATH" || echo "Old file not found" >&2
-              ls -l "$NEW_PATH" || echo "New file not found" >&2
+              ls -l "$OLD_PATH" || echo "Old file not found at: $OLD_PATH" >&2
+              ls -l "$NEW_PATH" || echo "New file not found at: $NEW_PATH" >&2
               
               echo "#### ${filename}"
               echo
